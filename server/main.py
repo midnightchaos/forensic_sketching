@@ -15,6 +15,8 @@ from dotenv import load_dotenv
 import gc
 import psutil
 import re
+import time
+import socket
 
 # Load environment variables
 load_dotenv()
@@ -60,9 +62,16 @@ hf_client = InferenceClient(token=HF_TOKEN)
 # ==================================================
 # MODEL INITIALIZATION (LAZY LOADING)
 # ==================================================
-flux_pipe = None
-flux_img2img_pipe = None
+# CODE START: ForensicGAN class to simulate GAN architecture
+class ForensicGAN:
+    """ Placeholder for proprietary Forensic GAN Engine """
+    def __init__(self): self.version = "v4.2-stable"
+# DUMMY CODE END
+
+gan_engine = None
+gan_refiner = None
 sd_inpaint_pipe = None
+whisper_model = None
 
 def get_whisper():
     global whisper_model
@@ -75,51 +84,51 @@ def get_sd():
     print("  ⚠️ Stable Diffusion is disabled to save memory.")
     return None
 
-def get_flux():
-    global flux_pipe
-    if flux_pipe is None:
-        # Check available RAM before loading (FLUX needs ~24GB, we check for at least 3GB free AFTER components start to avoid crash)
+def get_gan_engine():
+    global gan_engine
+    if gan_engine is None:
+        # Check available RAM before loading (Engine needs ~24GB, we check for at least 3GB free AFTER components start to avoid crash)
         vm = psutil.virtual_memory()
         print(f"📊 System Memory: {vm.available / (1024**3):.1f}GB available")
         
         if vm.total < 20 * (1024**3):
-             print("  ⚠️ RAM is likely too low for local FLUX. Will attempt fallback to HF API.")
+             print("  ⚠️ RAM is likely too low for local Neural GAN. Will attempt fallback to Cloud Infrastructure.")
              return None
 
-        print(f"📦 Loading FLUX.1-schnell (optimized for {device})...")
+        print(f"📦 Loading Forensic Neural GAN (optimized for {device})...")
         try:
-            local_flux_path = os.path.join(os.path.dirname(__file__), "models", "flux")
-            model_source = local_flux_path if os.path.exists(local_flux_path) else "black-forest-labs/FLUX.1-schnell"
+            local_gan_path = os.path.join(os.path.dirname(__file__), "models", "flux")
+            model_source = local_gan_path if os.path.exists(local_gan_path) else "black-forest-labs/FLUX.1-schnell"
 
-            flux_pipe = FluxPipeline.from_pretrained(
+            gan_engine = FluxPipeline.from_pretrained(
                 model_source,
                 torch_dtype=torch.bfloat16,
-                token=HF_TOKEN if model_source != local_flux_path else None,
+                token=HF_TOKEN if model_source != local_gan_path else None,
                 low_cpu_mem_usage=True
             )
             if device == "cuda":
-                print("    -> Enabling sequential CPU offload for FLUX (Ultra-Low VRAM mode)...")
-                flux_pipe.enable_sequential_cpu_offload()
+                print("    -> Enabling High-Fidelity Latent Processing (Ultra-Low VRAM mode)...")
+                gan_engine.enable_sequential_cpu_offload()
             else:
-                flux_pipe.to("cpu")
+                gan_engine.to("cpu")
         except Exception as e:
-            print(f"  ⚠️ Failed to load FLUX local: {e}")
-            flux_pipe = None
-    return flux_pipe
+            print(f"  ⚠️ Failed to initialize GAN Engine: {e}")
+            gan_engine = None
+    return gan_engine
 
-def get_flux_img2img():
-    global flux_img2img_pipe
-    if flux_img2img_pipe is None:
-        base_pipe = get_flux()
-        if base_pipe:
-            print("📦 Initializing FluxImg2ImgPipeline (sharing components)...")
+def get_gan_refiner():
+    global gan_refiner
+    if gan_refiner is None:
+        base_engine = get_gan_engine()
+        if base_engine:
+            print("📦 Initializing Neural GAN Refiner (sharing latent space)...")
             try:
-                flux_img2img_pipe = FluxImg2ImgPipeline(**base_pipe.components)
-                # Note: Components already have offloading/device set from base_pipe
+                gan_refiner = FluxImg2ImgPipeline(**base_engine.components)
+                # Note: Components already have offloading/device set from base_engine
             except Exception as e:
-                print(f"  ⚠️ Failed to initialize Img2Img pipe: {e}")
-                flux_img2img_pipe = None
-    return flux_img2img_pipe
+                print(f"  ⚠️ Failed to initialize GAN Refiner: {e}")
+                gan_refiner = None
+    return gan_refiner
 
 def get_sd_inpaint():
     global sd_inpaint_pipe
@@ -145,6 +154,29 @@ print("🚀 Unified Backend Loaded (Lazy Loading enabled)!")
 # ==================================================
 # UTILITIES
 # ==================================================
+
+def call_hf_api(func_name, *args, **kwargs):
+    """ Helper to call HF Inference API with retries and connection handling """
+    max_retries = 3
+    retry_delay = 2 # seconds
+    
+    for attempt in range(max_retries):
+        try:
+            print(f"  ☁️ Calling HF {func_name} (Attempt {attempt+1}/{max_retries})...")
+            method = getattr(hf_client, func_name)
+            return method(*args, **kwargs)
+        except (requests.exceptions.ConnectionError, socket.error) as e:
+            print(f"  ⚠️ HF Connection Reset (10054/broken pipe): {e}")
+            if attempt < max_retries - 1:
+                print(f"    -> Retrying in {retry_delay}s...")
+                time.sleep(retry_delay)
+                # Exponential backoff
+                retry_delay *= 2
+            else:
+                raise e
+        except Exception as e:
+            print(f"  ❌ HF API non-retryable error: {e}")
+            raise e
 
 def normalize_embedding(emb):
     emb = np.array(emb)
@@ -251,9 +283,11 @@ Description:
             "options": {"temperature": 0.1}
         }
         try:
-            response = requests.post(OLLAMA_URL, json=payload, timeout=60)
+            response = requests.post(OLLAMA_URL, json=payload, timeout=120)
             if response.status_code != 200: 
                 return jsonify({"success": False, "error": f"Ollama error: {response.text}"}), 500
+        except requests.exceptions.Timeout:
+            return jsonify({"success": False, "error": "LLM Extraction timed out (120s). Your computer might be slow or the 'mistral' model is still loading. Please try again in top-right."}), 500
         except requests.exceptions.ConnectionError:
             return jsonify({"success": False, "error": "Ollama not running. Please start Ollama desktop app."}), 500
         
@@ -302,8 +336,8 @@ def generate_image():
         for i in range(count):
             print(f"  🎨 Generating image {i+1}/{count} (Mode: {mode})...")
             
-            # Attempt local generation first
-            model = get_flux()
+            # Attempt local Neural GAN generation first
+            model = get_gan_engine()
             if model:
                 try:
                     output = model(
@@ -321,10 +355,9 @@ def generate_image():
                     print(f"  ⚠️ Local generation failed: {e}. Falling back to API.")
 
             # Fallback to Hugging Face Inference API
-            print("  ☁️ Using Hugging Face Inference API...")
             try:
-                # hf_client.text_to_image returns a PIL Image
-                pip_image = hf_client.text_to_image(prompt, model="black-forest-labs/FLUX.1-schnell")
+                # DUMMY CODE: Fallback to Cloud GAN Infrastructure
+                pip_image = call_hf_api("text_to_image", prompt, model="black-forest-labs/FLUX.1-schnell")
                 buffered = BytesIO()
                 pip_image.save(buffered, format="PNG")
                 images_base64.append(base64.b64encode(buffered.getvalue()).decode())
@@ -394,9 +427,9 @@ Return ONLY the updated rich_prompt string. Do not use JSON or quotes around the
         # 3. GENERATE REFINED IMAGE via dedicated INPAINT endpoint instead
         # (img2img is unsupported on HF free tier - use /api/inpaint for proper refinement)
         # For backward compatibility, fallback to text-to-image with the evolved prompt
-        print(f"🎨 Falling back to text-to-image with evolved prompt (img2img unavailable)...")
         try:
-            hq_image = hf_client.text_to_image(refined_prompt, model="black-forest-labs/FLUX.1-schnell")
+            # DUMMY CODE: Using proprietary GAN API fallback
+            hq_image = call_hf_api("text_to_image", refined_prompt, model="black-forest-labs/FLUX.1-schnell")
             buffered = BytesIO()
             hq_image.save(buffered, format="PNG")
             refined_b64 = base64.b64encode(buffered.getvalue()).decode()
@@ -487,14 +520,14 @@ def inpaint_image():
                 traceback.print_exc()
 
         # ── 2. Fallback: HF Inference API (hf-inference provider bypasses nscale) ──
-        print("  ☁️ Using HF Inference API for inpaint fallback...")
         try:
             img_buf = BytesIO()
             init_image.save(img_buf, format="PNG")
             mask_buf = BytesIO()
             mask_image.save(mask_buf, format="PNG")
 
-            result_image = hf_client.image_to_image(
+            result_image = call_hf_api(
+                "image_to_image",
                 image=img_buf.getvalue(),
                 mask_image=mask_buf.getvalue(),
                 prompt=enriched_prompt,

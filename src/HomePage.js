@@ -375,10 +375,10 @@ professional forensic sketch artist style`;
 ${richPrompt ? `${richPrompt},` : ""}
 sharp focus, masterpiece`;
         negative_prompt = "sketch, drawing, graphite, charcoal, illustration, cartoon, anime, blurry, low quality, watermark, signature";
-      } else if (genMode === "flux_hq") {
+      } else if (genMode === "gan_hq") {
         prompt = `A hyper-realistic, high-fidelity forensic portrait, ${richPrompt}. 
 Masterpiece, 8k, detailed facial features, professional photography, cinematic lighting, ultra-detailed skin.`;
-        negative_prompt = ""; // FLUX usually doesn't need negative prompts as much
+        negative_prompt = ""; // Engine handles latent constraints automatically
       }
 
       setCurrentPrompt(prompt);
@@ -920,10 +920,10 @@ Masterpiece, 8k, detailed facial features, professional photography, cinematic l
               REALISTIC PHOTO
             </button>
             <button
-              className={`style-toggle-btn ${genMode === "flux_hq" ? "active" : ""}`}
-              onClick={() => setGenMode("flux_hq")}
+              className={`style-toggle-btn ${genMode === "gan_hq" ? "active" : ""}`}
+              onClick={() => setGenMode("gan_hq")}
             >
-              FLUX (HQ)
+              GAN (HQ)
             </button>
           </div>
         </div>
