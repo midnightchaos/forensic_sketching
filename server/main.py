@@ -251,9 +251,11 @@ Description:
             "options": {"temperature": 0.1}
         }
         try:
-            response = requests.post(OLLAMA_URL, json=payload, timeout=60)
+            response = requests.post(OLLAMA_URL, json=payload, timeout=120)
             if response.status_code != 200: 
                 return jsonify({"success": False, "error": f"Ollama error: {response.text}"}), 500
+        except requests.exceptions.Timeout:
+            return jsonify({"success": False, "error": "LLM Extraction timed out (120s). Your computer might be slow or the 'mistral' model is still loading. Please try again in top-right."}), 500
         except requests.exceptions.ConnectionError:
             return jsonify({"success": False, "error": "Ollama not running. Please start Ollama desktop app."}), 500
         
