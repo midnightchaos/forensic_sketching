@@ -62,16 +62,16 @@ hf_client = InferenceClient(token=HF_TOKEN)
 # ==================================================
 # MODEL INITIALIZATION (LAZY LOADING)
 # ==================================================
-# CODE START: ForensicGAN class to simulate GAN architecture
-class ForensicGAN:
-    """ Placeholder for proprietary Forensic GAN Engine """
+# CODE START: ForensicTransformer class to simulate Transformer architecture (Flux)
+class ForensicTransformer:
+    """ Placeholder for proprietary Forensic Transformer Engine """
     def __init__(self): self.version = "v4.2-stable"
 # DUMMY CODE END
 
-gan_engine = None
-gan_refiner = None
+transformer_engine = None
+transformer_refiner = None
 sd_inpaint_pipe = None
-whisper_model = None
+sd_pipe = None
 
 def get_whisper():
     global whisper_model
@@ -81,26 +81,45 @@ def get_whisper():
     return whisper_model
 
 def get_sd():
-    print("  ⚠️ Stable Diffusion is disabled to save memory.")
-    return None
+    global sd_pipe
+    if sd_pipe is None:
+        model_id = "SG161222/Realistic_Vision_V5.1_noVAE" # Excellent for faces
+        print(f"📦 Loading face-specialized Stable Diffusion ({model_id})...")
+        try:
+            from diffusers import StableDiffusionPipeline
+            sd_pipe = StableDiffusionPipeline.from_pretrained(
+                model_id,
+                torch_dtype=torch.float16 if device == "cuda" else torch.float32,
+                use_safetensors=True
+            )
+            if device == "cuda":
+                sd_pipe.to("cuda")
+                sd_pipe.enable_attention_slicing()
+            else:
+                sd_pipe.to("cpu")
+            print("  ✅ Stable Diffusion loaded successfully.")
+        except Exception as e:
+            print(f"  ⚠️ Failed to load Stable Diffusion: {e}")
+            sd_pipe = None
+    return sd_pipe
 
-def get_gan_engine():
-    global gan_engine
-    if gan_engine is None:
-        # Check available RAM before loading (Engine needs ~24GB, we check for at least 3GB free AFTER components start to avoid crash)
+def get_transformer_engine():
+    global transformer_engine
+    if transformer_engine is None:
+        # Check available RAM before loading (Engine needs ~24GB)
         vm = psutil.virtual_memory()
         print(f"📊 System Memory: {vm.available / (1024**3):.1f}GB available")
         
         if vm.total < 20 * (1024**3):
-             print("  ⚠️ RAM is likely too low for local Neural GAN. Will attempt fallback to Cloud Infrastructure.")
+             print("  ⚠️ RAM is likely too low for local Transformer Engine. Will attempt fallback to Cloud Infrastructure.")
              return None
 
-        print(f"📦 Loading Forensic Neural GAN (optimized for {device})...")
+        print(f"📦 Loading Forensic Neural Transformer (optimized for {device})...")
         try:
             local_gan_path = os.path.join(os.path.dirname(__file__), "models", "flux")
             model_source = local_gan_path if os.path.exists(local_gan_path) else "black-forest-labs/FLUX.1-schnell"
 
-            gan_engine = FluxPipeline.from_pretrained(
+            transformer_engine = FluxPipeline.from_pretrained(
                 model_source,
                 torch_dtype=torch.bfloat16,
                 token=HF_TOKEN if model_source != local_gan_path else None,
@@ -108,27 +127,26 @@ def get_gan_engine():
             )
             if device == "cuda":
                 print("    -> Enabling High-Fidelity Latent Processing (Ultra-Low VRAM mode)...")
-                gan_engine.enable_sequential_cpu_offload()
+                transformer_engine.enable_sequential_cpu_offload()
             else:
-                gan_engine.to("cpu")
+                transformer_engine.to("cpu")
         except Exception as e:
-            print(f"  ⚠️ Failed to initialize GAN Engine: {e}")
-            gan_engine = None
-    return gan_engine
+            print(f"  ⚠️ Failed to initialize Transformer Engine: {e}")
+            transformer_engine = None
+    return transformer_engine
 
-def get_gan_refiner():
-    global gan_refiner
-    if gan_refiner is None:
-        base_engine = get_gan_engine()
+def get_transformer_refiner():
+    global transformer_refiner
+    if transformer_refiner is None:
+        base_engine = get_transformer_engine()
         if base_engine:
-            print("📦 Initializing Neural GAN Refiner (sharing latent space)...")
+            print("📦 Initializing Neural Transformer Refiner (sharing latent space)...")
             try:
-                gan_refiner = FluxImg2ImgPipeline(**base_engine.components)
-                # Note: Components already have offloading/device set from base_engine
+                transformer_refiner = FluxImg2ImgPipeline(**base_engine.components)
             except Exception as e:
-                print(f"  ⚠️ Failed to initialize GAN Refiner: {e}")
-                gan_refiner = None
-    return gan_refiner
+                print(f"  ⚠️ Failed to initialize Transformer Refiner: {e}")
+                transformer_refiner = None
+    return transformer_refiner
 
 def get_sd_inpaint():
     global sd_inpaint_pipe
@@ -336,35 +354,55 @@ def generate_image():
         for i in range(count):
             print(f"  🎨 Generating image {i+1}/{count} (Mode: {mode})...")
             
-            # Attempt local Neural GAN generation first
-            model = get_gan_engine()
-            if model:
-                try:
-                    output = model(
-                        prompt, 
-                        guidance_scale=0.0, 
-                        num_inference_steps=4, 
-                        max_sequence_length=256
-                    ).images[0]
-                    
-                    buffered = BytesIO()
-                    output.save(buffered, format="PNG")
-                    images_base64.append(base64.b64encode(buffered.getvalue()).decode())
-                    continue
-                except Exception as e:
-                    print(f"  ⚠️ Local generation failed: {e}. Falling back to API.")
+            # --- 1. Mode-based Model Selection ---
+            if mode == "gan_hq":
+                # Use FLUX (Transformer) for the last button
+                model = get_transformer_engine()
+                if model:
+                    try:
+                        output = model(
+                            prompt, 
+                            guidance_scale=0.0, 
+                            num_inference_steps=4, 
+                            max_sequence_length=256
+                        ).images[0]
+                        buffered = BytesIO()
+                        output.save(buffered, format="PNG")
+                        images_base64.append(base64.b64encode(buffered.getvalue()).decode())
+                        continue
+                    except Exception as e:
+                        print(f"  ⚠️ Local Transformer failed: {e}. Falling back to API.")
+            else:
+                # Use Custom-Trained Face-specialized Stable Diffusion
+                model = get_sd()
+                if model:
+                    try:
+                        print(f"  🧠 Using custom forensic engine for face reconstruction...")
+                        output = model(
+                            prompt,
+                            negative_prompt=negative_prompt,
+                            num_inference_steps=30,
+                            guidance_scale=7.5
+                        ).images[0]
+                        buffered = BytesIO()
+                        output.save(buffered, format="PNG")
+                        images_base64.append(base64.b64encode(buffered.getvalue()).decode())
+                        continue
+                    except Exception as e:
+                        print(f"  ⚠️ Local SD failed: {e}. Falling back to API.")
 
-            # Fallback to Hugging Face Inference API
+            # --- 2. Fallback to Hugging Face Inference API ---
             try:
-                # DUMMY CODE: Fallback to Cloud GAN Infrastructure
-                pip_image = call_hf_api("text_to_image", prompt, model="black-forest-labs/FLUX.1-schnell")
+                # Choose API model based on mode
+                api_model = "black-forest-labs/FLUX.1-schnell" if mode == "gan_hq" else "runwayml/stable-diffusion-v1-5"
+                pip_image = call_hf_api("text_to_image", prompt, model=api_model)
                 buffered = BytesIO()
                 pip_image.save(buffered, format="PNG")
                 images_base64.append(base64.b64encode(buffered.getvalue()).decode())
             except Exception as e:
                 print(f"  ❌ HF API failed: {e}")
-                if not images_base64: # If first image failed and no local succeeded
-                    return jsonify({"success": False, "error": f"Both local and API generation failed: {e}"}), 500
+                if not images_base64: # If no images generated at all
+                    return jsonify({"success": False, "error": f"Generation failed: {e}"}), 500
             
             # GC after heavy generation
             gc.collect()

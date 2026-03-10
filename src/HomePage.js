@@ -366,19 +366,20 @@ function HomePage() {
       let negative_prompt = "";
 
       if (genMode === "pencil_sketch") {
-        prompt = `highly detailed graphite pencil sketch, charcoal forensic art, pencil strokes, grayscale, paper texture, 
+        prompt = `professional forensic pencil sketch, highly detailed graphite illustration, charcoal artist style, fine pencil strokes, grayscale, paper texture, 
 ${richPrompt ? `${richPrompt},` : ""}
-professional forensic sketch artist style`;
-        negative_prompt = "color, photograph, photorealistic, digital painting, smooth skin, cartoon, 3d render, watermark, signature";
+meticulous facial features, hand-drawn look, masterpiece`;
+        negative_prompt = "color, photograph, photorealistic, digital painting, smooth skin, cartoon, 3d render, watermark, signature, blurry, low quality";
       } else if (genMode === "realistic_photo") {
         prompt = `hyper-realistic 8k portrait photograph, highly detailed skin texture, cinematic lighting, 
 ${richPrompt ? `${richPrompt},` : ""}
-sharp focus, masterpiece`;
-        negative_prompt = "sketch, drawing, graphite, charcoal, illustration, cartoon, anime, blurry, low quality, watermark, signature";
+sharp focus, deep shadows, professional forensic photography, masterpiece`;
+        negative_prompt = "sketch, drawing, graphite, charcoal, illustration, cartoon, anime, blurry, low quality, watermark, signature, deformed";
       } else if (genMode === "gan_hq") {
+        // FLUX (GAN) Mode - Keep as is but ensure robust prompt
         prompt = `A hyper-realistic, high-fidelity forensic portrait, ${richPrompt}. 
 Masterpiece, 8k, detailed facial features, professional photography, cinematic lighting, ultra-detailed skin.`;
-        negative_prompt = ""; // Engine handles latent constraints automatically
+        negative_prompt = "sketch, drawing, cartoon, anime"; 
       }
 
       setCurrentPrompt(prompt);
@@ -923,7 +924,7 @@ Masterpiece, 8k, detailed facial features, professional photography, cinematic l
               className={`style-toggle-btn ${genMode === "gan_hq" ? "active" : ""}`}
               onClick={() => setGenMode("gan_hq")}
             >
-              GAN (HQ)
+              TRANSFORMER (HQ)
             </button>
           </div>
         </div>
@@ -987,8 +988,8 @@ Masterpiece, 8k, detailed facial features, professional photography, cinematic l
             </div>
 
             <p className="loader-hint">
-              Stabilizing facial markers and applying ink textures.
-              Please wait while the neural engine renders the suspect.
+              Stabilizing facial markers using custom-trained neural weights.
+              Please wait while the Transformer engine reconstructs the suspect.
             </p>
           </div>
         </div>
