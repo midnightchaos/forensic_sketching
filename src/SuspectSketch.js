@@ -60,7 +60,6 @@ export default function SuspectSketch() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [sketchVersion, setSketchVersion] = useState(1);
   const [isMatching, setIsMatching] = useState(false);
-  const [matchResult, setMatchResult] = useState(null);
   const [zoomLevel, setZoomLevel] = useState(100);
   const [generatedImage, setGeneratedImage] = useState(null);
   const [currentPrompt, setCurrentPrompt] = useState("");
@@ -410,7 +409,7 @@ export default function SuspectSketch() {
         verified: data.verified,
       });
 
-      setMatchResult(data);
+      // setMatchResult(data); (Removed as redundant)
 
       await logUserActivity("NAVIGATION", "GO_TO_PATTERN_MATCHING", {
         similarity: data.similarity,

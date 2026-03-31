@@ -33,6 +33,9 @@ function ProfileScreen() {
     department: "",
     badgeNumber: "",
     bio: "",
+    preferredStyle: "pencil_sketch",
+    autoSave: true,
+    theme: "light",
   });
 
   const [passwordData, setPasswordData] = useState({
@@ -65,6 +68,9 @@ function ProfileScreen() {
           department: data.department || "",
           badgeNumber: data.badgeNumber || "",
           bio: data.bio || "",
+          preferredStyle: data.preferredStyle || "pencil_sketch",
+          autoSave: data.autoSave ?? true,
+          theme: data.theme || "light",
         });
       }
     } catch (error) {
@@ -99,6 +105,9 @@ function ProfileScreen() {
         department: profile.department,
         badgeNumber: profile.badgeNumber,
         bio: profile.bio,
+        preferredStyle: profile.preferredStyle,
+        autoSave: profile.autoSave,
+        theme: profile.theme,
         updatedAt: serverTimestamp(),
       });
       setMessage({ type: "success", text: "Profile updated successfully!" });
@@ -604,6 +613,86 @@ function ProfileScreen() {
                     className="crisp-icon inverted"
                   />
                   <span>Save Changes</span>
+                </>
+              )}
+            </button>
+          </div>
+        </section>
+
+        {/* Customization Panel */}
+        <section className="manga-panel customization-panel">
+          <div className="panel-corners">
+            <div className="corner top-left" />
+            <div className="corner top-right" />
+            <div className="corner bottom-left" />
+            <div className="corner bottom-right" />
+          </div>
+          <div className="panel-header">
+            <span className="panel-number">02</span>
+            <h2>Account Preferences</h2>
+          </div>
+          <div className="form-grid">
+            <div className="input-group">
+              <label className="input-label">
+                <span className="label-text">Preferred Sketch Style</span>
+                <span className="label-line" />
+              </label>
+              <select 
+                className="neo-select"
+                value={profile.preferredStyle}
+                onChange={(e) => handleInputChange("preferredStyle", e.target.value)}
+              >
+                <option value="pencil_sketch">Pencil Sketch (Traditional)</option>
+                <option value="realistic_photo">Realistic Photo (Modern)</option>
+                <option value="gan_hq">High Fidelity (AI Optimized)</option>
+              </select>
+            </div>
+            <div className="input-group">
+              <label className="input-label">
+                <span className="label-text">Interface Theme</span>
+                <span className="label-line" />
+              </label>
+              <select 
+                className="neo-select"
+                value={profile.theme}
+                onChange={(e) => handleInputChange("theme", e.target.value)}
+              >
+                <option value="light">Classic Parchment</option>
+                <option value="dark">Antique Ink (Dark)</option>
+                <option value="sepia">Vintage Sepia</option>
+              </select>
+            </div>
+            <div className="input-group checkbox-group">
+              <label className="checkbox-container">
+                <input 
+                  type="checkbox"
+                  checked={profile.autoSave}
+                  onChange={(e) => handleInputChange("autoSave", e.target.checked)}
+                />
+                <span className="checkmark" />
+                <span className="checkbox-label">Auto-save witness statements to local cache</span>
+              </label>
+            </div>
+          </div>
+          <div className="form-actions">
+             <button
+              className="action-btn primary"
+              onClick={handleSaveProfile}
+              disabled={isSaving}
+            >
+              {isSaving ? (
+                <>
+                  <div className="btn-loader" />
+                  <span>Saving...</span>
+                </>
+              ) : (
+                <>
+                  <img
+                    src={saveIcon}
+                    alt="Save"
+                    className="crisp-icon inverted"
+                  />
+                  <span>Save Preferences</span>
                 </>
               )}
             </button>
@@ -1254,6 +1343,117 @@ const styles = `
   }
   .modal-btn.primary:active:not(:disabled) { transform: translateY(0); box-shadow: none; }
   .modal-btn.primary:disabled { opacity: 0.6; cursor: not-allowed; }
+
+  /* ═══════════════════════════════════════
+     NEW CUSTOMIZATION STYLES
+  ═══════════════════════════════════════ */
+  .customization-panel {
+    margin-top: 2rem;
+    border-color: var(--indigo);
+  }
+
+  .customization-panel .panel-corners .corner {
+    border-color: var(--indigo-light);
+  }
+
+  .neo-select {
+    width: 100%;
+    background: var(--parchment-light);
+    border: var(--border-thin) solid var(--ink);
+    padding: 0.75rem 1rem;
+    font-family: var(--font-main);
+    font-size: 0.95rem;
+    color: var(--ink);
+    cursor: pointer;
+    transition: all 0.2s var(--transition-smooth);
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 1rem center;
+    background-size: 1.2rem;
+  }
+
+  .neo-select:focus {
+    outline: none;
+    border-color: var(--indigo);
+    box-shadow: 0 0 0 3px rgba(38, 70, 83, 0.1);
+    transform: translateY(-1px);
+  }
+
+  .checkbox-group {
+    grid-column: 1 / -1;
+    margin-top: 0.5rem;
+  }
+
+  .checkbox-container {
+    display: flex;
+    align-items: center;
+    position: relative;
+    padding-left: 35px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    color: var(--ink-muted);
+    user-select: none;
+    transition: color 0.2s;
+  }
+
+  .checkbox-container:hover {
+    color: var(--ink);
+  }
+
+  .checkbox-container input {
+    position: absolute;
+    opacity: 0;
+    cursor: pointer;
+    height: 0;
+    width: 0;
+  }
+
+  .checkmark {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    transform: translateY(-50%);
+    height: 20px;
+    width: 20px;
+    background: var(--parchment-light);
+    border: var(--border-thin) solid var(--ink);
+    transition: all 0.2s var(--transition-snap);
+  }
+
+  .checkbox-container:hover input ~ .checkmark {
+    background-color: var(--parchment-dark);
+  }
+
+  .checkbox-container input:checked ~ .checkmark {
+    background-color: var(--indigo);
+    border-color: var(--indigo);
+  }
+
+  .checkmark:after {
+    content: "";
+    position: absolute;
+    display: none;
+  }
+
+  .checkbox-container input:checked ~ .checkmark:after {
+    display: block;
+  }
+
+  .checkbox-container .checkmark:after {
+    left: 6px;
+    top: 2px;
+    width: 5px;
+    height: 10px;
+    border: solid var(--parchment);
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+  }
+
+  .checkbox-label {
+    line-height: 1.2;
+  }
 
   /* ═══════════════════════════════════════
      FOOTER

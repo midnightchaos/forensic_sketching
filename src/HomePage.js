@@ -5,7 +5,6 @@ import { auth, db, storage } from "./firebaseConfig";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import {
-  Star,
   ImagePlus,
   Trash2,
   PenTool,
@@ -16,6 +15,8 @@ import {
   ChevronRight,
   BookmarkPlus,
   Bookmark,
+  Lock,
+  ShieldAlert,
 } from "lucide-react";
 
 import feedbackIcon from "./assets/feedback.png";
@@ -53,11 +54,43 @@ function HomePage() {
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState(null);
   const [currentPrompt, setCurrentPrompt] = useState("");
+  const [showLoginGate, setShowLoginGate] = useState(false);
+  const [authUser, setAuthUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
 
   const mediaRecorderRef = useRef(null);
   const chunksRef = useRef([]);
   const fileInputRef = useRef(null);
   const cachePanelRef = useRef(null);
+
+  useEffect(() => {
+    const unsubscribe = auth.onAuthStateChanged((user) => {
+      setAuthUser(user);
+      setAuthLoading(false);
+      if (user) {
+        logUserActivity("PAGE", "HOME_VIEW");
+        setCurrentUid(user.uid);
+        
+        // Load settings/cache for this user
+        const savedCache = localStorage.getItem(getUserCacheKey(user.uid));
+        if (savedCache) {
+          try { setCachedDescriptions(JSON.parse(savedCache)); } catch { setCachedDescriptions([]); }
+        }
+        
+        const currentSaved = localStorage.getItem(getUserCurrentKey(user.uid));
+        if (currentSaved) setDescription(currentSaved);
+
+        // Load last generated sketch (global or user-specific if preferred)
+        const lastImg = localStorage.getItem("generatedSketch");
+        if (lastImg) setLastGeneratedImage(`data:image/png;base64,${lastImg}`);
+      } else {
+        logUserActivity("PAGE", "GUEST_HOME_VIEW");
+        setCurrentUid(null);
+        setCachedDescriptions([]);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
   const navigate = useNavigate();
 
   const logUserActivity = async (type, action, meta = {}) => {
@@ -79,40 +112,6 @@ function HomePage() {
 
   useEffect(() => {
     setIsLoaded(true);
-    logUserActivity("PAGE", "HOME_VIEW");
-    const user = auth.currentUser;
-    if (user) {
-      const uid = user.uid;
-      setCurrentUid(uid);
-
-      // Load cached descriptions for this specific user
-      const saved = localStorage.getItem(getUserCacheKey(uid));
-      if (saved) {
-        try {
-          setCachedDescriptions(JSON.parse(saved));
-        } catch {
-          // Clear corrupted data
-          localStorage.removeItem(getUserCacheKey(uid));
-          setCachedDescriptions([]);
-        }
-      } else {
-        setCachedDescriptions([]);
-      }
-
-      // Load current description for this specific user
-      const lastText = localStorage.getItem(getUserCurrentKey(uid));
-      if (lastText && lastText.trim()) {
-        setDescription(lastText);
-      } else {
-        setDescription("");
-        // Clean up any empty entries
-        localStorage.removeItem(getUserCurrentKey(uid));
-      }
-
-      // Load last generated sketch
-      const lastImg = localStorage.getItem("generatedSketch");
-      if (lastImg) setLastGeneratedImage(`data:image/png;base64,${lastImg}`);
-    }
   }, []);
 
   useEffect(() => {
@@ -310,7 +309,22 @@ function HomePage() {
   };
 
   const extractFeaturesWithLLM = async () => {
+    // 1. Show login gate to guests FIRST (even if empty description)
+    if (!authUser && !authLoading) {
+      setShowLoginGate(true);
+      return;
+    }
+
     if (!description.trim()) return;
+
+    // Wait for auth to initialize or check immediately
+    if (authLoading) return;
+
+    if (!authUser) {
+      setShowLoginGate(true);
+      return;
+    }
+
     saveToCache();
     setIsGenerating(true);
 
@@ -555,33 +569,50 @@ Masterpiece, 8k, detailed facial features, professional photography, cinematic l
 
           <span className="nav-dot" />
 
-          <button
-            className="nav-btn"
-            onClick={handleProfileClick}
-            title="Profile"
-          >
-            <img
-              src={profileIcon}
-              alt="Profile"
-              className="crisp-icon nav-icon-size"
-            />
-            <span className="nav-btn-label">Profile</span>
-          </button>
+          {auth.currentUser ? (
+            <>
+              <button
+                className="nav-btn"
+                onClick={handleProfileClick}
+                title="Profile"
+              >
+                <img
+                  src={profileIcon}
+                  alt="Profile"
+                  className="crisp-icon nav-icon-size"
+                />
+                <span className="nav-btn-label">Profile</span>
+              </button>
 
-          <span className="nav-dot" />
+              <span className="nav-dot" />
 
-          <button
-            className="nav-btn nav-btn-logout"
-            onClick={handleLogout}
-            title="Logout"
-          >
-            <img
-              src={logoutIcon}
-              alt="Logout"
-              className="crisp-icon nav-icon-size"
-            />
-            <span className="nav-btn-label">Logout</span>
-          </button>
+              <button
+                className="nav-btn nav-btn-logout"
+                onClick={handleLogout}
+                title="Logout"
+              >
+                <img
+                  src={logoutIcon}
+                  alt="Logout"
+                  className="crisp-icon nav-icon-size"
+                />
+                <span className="nav-btn-label">Logout</span>
+              </button>
+            </>
+          ) : (
+            <button
+              className="nav-btn nav-btn-login premium-pulse"
+              onClick={() => navigate("/login")}
+              title="Sign In"
+            >
+              <img
+                src={profileIcon}
+                alt="Login"
+                className="crisp-icon nav-icon-size inverted"
+              />
+              <span className="nav-btn-label">Access System</span>
+            </button>
+          )}
         </div>
       </nav>
 
@@ -725,16 +756,87 @@ Masterpiece, 8k, detailed facial features, professional photography, cinematic l
         </div>
       )}
 
-      <main className={`main-content ${isLoaded ? "loaded" : ""}`}>
-        <header className="header-section">
-          <div className="brush-stroke-container">
-            <h1 className="main-title">
-              <span className="title-accent"></span>
-              <span className="title-main">FACE TRACE</span>
-            </h1>
-            <div className="title-underline" />
+      {/* Login Gate Modal */}
+      {showLoginGate && (
+        <div className="modal-overlay" onClick={() => setShowLoginGate(false)}>
+          <div className="modal-container login-gate-modal" onClick={(e) => e.stopPropagation()}>
+            <button className="modal-close-btn" onClick={() => setShowLoginGate(false)}>
+              <div className="crisp-icon-wrapper">
+                <XCircle size={24} className="crisp-icon" />
+              </div>
+            </button>
+            <div className="modal-header">
+              <span className="panel-number">AUTH</span>
+              <h2>Authentication Required</h2>
+            </div>
+            <div className="gate-content">
+              <div className="gate-icon-wrapper">
+                <div className="gate-rings">
+                  <div className="ring" />
+                  <div className="ring" />
+                </div>
+                <BookmarkPlus size={48} className="gate-main-icon" />
+              </div>
+              <p className="gate-text">
+                To access the **Neural Synthesis Interface** and generate high-fidelity forensic sketches, you must be logged into the investigator system.
+              </p>
+              <div className="gate-features">
+                <div className="gate-feature">
+                  <CheckCircle size={16} />
+                  <span>Cloud Synchronization</span>
+                </div>
+                <div className="gate-feature">
+                  <CheckCircle size={16} />
+                  <span>Evidence Persistence</span>
+                </div>
+                <div className="gate-feature">
+                  <CheckCircle size={16} />
+                  <span>Advanced Model Access</span>
+                </div>
+              </div>
+            </div>
+            <div className="modal-actions">
+              <button className="modal-btn secondary" onClick={() => setShowLoginGate(false)}>
+                Stay as Guest
+              </button>
+              <button 
+                className="modal-btn primary premium-pulse" 
+                onClick={() => {
+                  setShowLoginGate(false);
+                  navigate("/login");
+                }}
+              >
+                Initialize Login
+              </button>
+            </div>
           </div>
-          <p className="subtitle">AI Driven Sketch Creator</p>
+        </div>
+      )}
+
+      <main className={`main-content ${isLoaded ? "loaded" : ""}`}>
+        <header className="hero-banner">
+          <div className="hero-content">
+            <div className="brush-stroke-container">
+              <h1 className="main-title">
+                <span className="title-accent">Next-Gen Forensic Intelligence</span>
+                <span className="title-main">FACE TRACE</span>
+              </h1>
+              <div className="title-underline" />
+            </div>
+            <p className="hero-subtitle">
+              Transforming witness testimonies into high-fidelity forensic sketches 
+              using advanced neural synthesis and linguistic analysis.
+            </p>
+            {!auth.currentUser && (
+              <div className="hero-cta">
+                <button className="cta-button" onClick={() => navigate("/login")}>
+                  <span>Initialize Investigator Account</span>
+                  <ChevronRight size={18} />
+                </button>
+              </div>
+            )}
+          </div>
+          <div className="hero-visual-bg" />
         </header>
 
         <div className="manga-grid">
@@ -929,31 +1031,53 @@ Masterpiece, 8k, detailed facial features, professional photography, cinematic l
           </div>
         </div>
 
-        <div className="action-bar">
-          <button
-            className="action-button primary"
-            onClick={extractFeaturesWithLLM}
-            disabled={isGenerating || !description.trim()}
-          >
-            <PenTool size={18} className="btn-icon" />
-            <span>GENERATE SKETCH</span>
-          </button>
-          <button
-            className="action-button secondary"
-            onClick={() => {
-              setDescription("");
-              if (currentUid) {
-                localStorage.removeItem(getUserCurrentKey(currentUid));
-              }
-            }}
-          >
-            <Trash2 size={18} className="btn-icon" />
-            <span>CLEAR</span>
-          </button>
-          <button className="action-button secondary">
-            <XCircle size={18} className="btn-icon" />
-            <span>CANCEL</span>
-          </button>
+        <div className="action-bar-container">
+          {authUser ? (
+            <div className="investigator-badge">
+              <CheckCircle size={14} className="notice-icon" />
+              <span>Investigator Verified</span>
+            </div>
+          ) : (
+            !authLoading && (
+              <div className="guest-notice">
+                <ShieldAlert size={14} className="notice-icon" />
+                <span>Login required for neural synthesis</span>
+              </div>
+            )
+          )}
+          <div className="action-bar">
+            <button
+              className={`action-button primary ${!authUser ? "guest-lock" : ""} ${authUser && description.trim() ? "ready-pulse" : ""}`}
+              onClick={extractFeaturesWithLLM}
+              disabled={isGenerating || (authUser && !description.trim())}
+              title={!authUser ? (authLoading ? "Initializing..." : "Login Required") : (description.trim() ? "Generate Sketch" : "Description Required")}
+            >
+              {!authUser ? (
+                <Lock size={18} className="btn-icon lock-icon" />
+              ) : (
+                <PenTool size={18} className="btn-icon" />
+              )}
+              <span>{isGenerating ? "EXTRACTING..." : "GENERATE SKETCH"}</span>
+            </button>
+            <button
+              className="action-button secondary"
+              onClick={() => {
+                setDescription("");
+                if (currentUid) {
+                  localStorage.removeItem(getUserCurrentKey(currentUid));
+                }
+              }}
+            >
+              <Trash2 size={18} className="btn-icon" />
+              <span>CLEAR</span>
+            </button>
+            {isGenerating && (
+              <button className="action-button secondary">
+                <XCircle size={18} className="btn-icon" />
+                <span>CANCEL</span>
+              </button>
+            )}
+          </div>
         </div>
 
         <footer className="footer-decoration">
@@ -1962,32 +2086,81 @@ Masterpiece, 8k, detailed facial features, professional photography, cinematic l
         /* ═══════════════════════════════════════
            ACTION BAR
         ═══════════════════════════════════════ */
-        .action-bar { display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap; margin-top: 2.5rem; }
+        .action-bar { display: flex; justify-content: center; gap: 1.5rem; flex-wrap: wrap; margin-top: 3.5rem; perspective: 1000px; }
         .action-button {
-          display: flex; align-items: center; gap: 0.6rem;
-          padding: 0.9rem 1.4rem; background: var(--parchment);
+          display: flex; align-items: center; gap: 0.8rem;
+          padding: 1.1rem 2rem; background: var(--parchment);
           border: var(--border-thick) solid var(--ink);
           border-radius: var(--radius-sm);
-          font-family: var(--font-body); font-size: 0.72rem; font-weight: 700;
-          letter-spacing: 0.1em; color: var(--ink); cursor: pointer;
+          font-family: var(--font-display); font-size: 0.85rem; font-weight: 800;
+          letter-spacing: 0.15em; color: var(--ink); cursor: pointer;
           position: relative; overflow: hidden;
-          transition: all 0.25s var(--transition-snap);
+          transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+          text-transform: uppercase;
+          box-shadow: 6px 6px 0 var(--ink);
         }
-        .action-button::after {
-          content: ''; position: absolute; bottom: 0; left: 0;
-          width: 100%; height: 3px; background: var(--cinnabar);
-          transform: scaleX(0); transform-origin: right;
-          transition: transform 0.3s var(--transition-smooth);
+        .action-button::before {
+          content: ''; position: absolute; inset: 0;
+          background: linear-gradient(45deg, transparent, rgba(233, 196, 106, 0.1), transparent);
+          transform: translateX(-100%); transition: transform 0.6s;
         }
-        .action-button:hover::after { transform: scaleX(1); transform-origin: left; }
-        .action-button:hover { transform: translateY(-3px); box-shadow: 0 5px 0 var(--ink); }
-        .action-button:active { transform: translateY(0); box-shadow: none; }
-        .action-button.primary { background: var(--ink); color: var(--parchment); }
-        .action-button.primary::after { background: var(--sunflower); }
-        .action-button.primary:hover { background: var(--ink-light); }
-        .action-button.primary .btn-icon { color: var(--sunflower); }
+        .action-button:hover::before { transform: translateX(100%); }
+        .action-button:hover { transform: translate(-3px, -3px); box-shadow: 9px 9px 0 var(--ink); }
+        .action-button:active { transform: translate(0, 0); box-shadow: 2px 2px 0 var(--ink); }
+        .action-button.primary { 
+          background: var(--ink); color: var(--parchment);
+          border-color: var(--ink);
+        }
+        .action-button.primary:hover { 
+          background: var(--ink-light); 
+          color: var(--sunflower);
+        }
+        .action-button.primary .btn-icon { color: var(--sunflower); transition: transform 0.3s; }
+        .action-button.primary:hover .btn-icon { transform: rotate(15deg) scale(1.2); }
         .action-button:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; box-shadow: none !important; }
-        .btn-icon { width: 18px; height: 18px; flex-shrink: 0; }
+        .btn-icon { width: 22px; height: 22px; flex-shrink: 0; }
+
+        /* ═══════════════════════════════════════
+           HERO SECTION
+        ═══════════════════════════════════════ */
+        .hero-banner { 
+          position: relative; padding: 5rem 1rem; margin-bottom: 4rem; 
+          text-align: center; border-bottom: 2px solid var(--ink);
+          overflow: hidden;
+          background: radial-gradient(circle at 50% 50%, rgba(38, 70, 83, 0.05) 0%, transparent 70%);
+        }
+        .hero-content { position: relative; z-index: 2; max-width: 800px; margin: 0 auto; }
+        .hero-subtitle { 
+          font-family: var(--font-body); font-size: 1.1rem; color: var(--ink-muted);
+          margin: 1.5rem auto 2.5rem; line-height: 1.6; max-width: 600px;
+          font-weight: 500;
+        }
+        .hero-cta { margin-top: 2rem; display: flex; justify-content: center; }
+        .cta-button {
+          display: flex; align-items: center; gap: 0.75rem;
+          padding: 1rem 2rem; background: var(--cinnabar);
+          color: white; font-weight: 800; font-size: 0.9rem;
+          text-transform: uppercase; letter-spacing: 0.1em;
+          border-radius: var(--radius-sm); border: 3px solid var(--cinnabar-dark);
+          transition: all 0.3s var(--transition-bounce);
+          box-shadow: 0 4px 15px rgba(179, 58, 58, 0.3);
+        }
+        .cta-button:hover {
+          transform: translateY(-4px) scale(1.02);
+          background: var(--cinnabar-light);
+          box-shadow: 0 8px 25px rgba(179, 58, 58, 0.4);
+        }
+        .premium-pulse {
+          animation: premiumPulse 2s infinite;
+          background: var(--ink) !important;
+          color: var(--sunflower) !important;
+          border-color: var(--sunflower) !important;
+        }
+        @keyframes premiumPulse {
+          0% { box-shadow: 0 0 0 0 rgba(233, 196, 106, 0.4); }
+          70% { box-shadow: 0 0 0 10px rgba(233, 196, 106, 0); }
+          100% { box-shadow: 0 0 0 0 rgba(233, 196, 106, 0); }
+        }
 
         /* ═══════════════════════════════════════
            FOOTER
@@ -2293,6 +2466,161 @@ Masterpiece, 8k, detailed facial features, professional photography, cinematic l
           font-size: 0.7rem; color: var(--ink-muted);
           font-style: italic; margin-bottom: 1.5rem;
           text-align: center; opacity: 0.8;
+        }
+        /* ═══════════════════════════════════════
+           LOGIN GATE MODAL
+        ═══════════════════════════════════════ */
+        .login-gate-modal {
+          max-width: 480px;
+          text-align: center;
+          animation: modalSlideUp 0.4s var(--transition-snap);
+        }
+        @keyframes modalSlideUp {
+          from { opacity: 0; transform: translateY(40px) scale(0.95); }
+          to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        .gate-content {
+          padding: 1rem 0;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 1.5rem;
+        }
+        .gate-icon-wrapper {
+          position: relative;
+          width: 100px;
+          height: 100px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          margin-bottom: 0.5rem;
+        }
+        .gate-main-icon {
+          color: var(--cinnabar);
+          z-index: 2;
+        }
+        .gate-rings {
+          position: absolute;
+          inset: 0;
+          z-index: 1;
+        }
+        .gate-rings .ring {
+          position: absolute;
+          inset: 0;
+          border: 2px solid var(--cinnabar);
+          border-radius: 50%;
+          opacity: 0.2;
+          animation: gateRingPulse 2s infinite ease-out;
+        }
+        .gate-rings .ring:nth-child(2) {
+          animation-delay: 1s;
+        }
+        @keyframes gateRingPulse {
+          0% { transform: scale(0.8); opacity: 0.4; }
+          100% { transform: scale(1.6); opacity: 0; }
+        }
+        .gate-text {
+          font-family: var(--font-body);
+          font-size: 0.95rem;
+          line-height: 1.6;
+          color: var(--ink);
+          margin: 0;
+        }
+        .gate-text b, .gate-text strong {
+          color: var(--cinnabar);
+          font-weight: 700;
+        }
+        .gate-features {
+          display: grid;
+          grid-template-columns: repeat(1, 1fr);
+          gap: 0.75rem;
+          width: 100%;
+          background: rgba(38, 70, 83, 0.05);
+          padding: 1.25rem;
+          border-radius: var(--radius-sm);
+          border: 1px dashed var(--indigo);
+        }
+        .gate-feature {
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+          color: var(--indigo);
+          font-size: 0.8rem;
+          font-weight: 600;
+          letter-spacing: 0.02em;
+        }
+        .login-gate-modal .modal-actions {
+          margin-top: 1.5rem;
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 1rem;
+        }
+        @media (max-width: 480px) {
+          .login-gate-modal .modal-actions {
+            grid-template-columns: 1fr;
+          }
+        }
+        .action-bar-container {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 0.75rem;
+          width: 100%;
+          max-width: 600px;
+          margin: 0 auto;
+        }
+        .guest-notice {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          color: var(--cinnabar);
+          font-size: 0.75rem;
+          font-weight: 600;
+          letter-spacing: 0.05em;
+          text-transform: uppercase;
+          background: rgba(179, 58, 58, 0.05);
+          padding: 0.4rem 0.8rem;
+          border-radius: 20px;
+          border: 1px solid rgba(179, 58, 58, 0.2);
+          animation: noticeFadeIn 0.5s ease-out;
+        }
+        @keyframes noticeFadeIn {
+          from { opacity: 0; transform: translateY(5px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .action-button.guest-lock {
+          background: var(--ink);
+          color: var(--paper);
+          border-color: var(--ink);
+        }
+        .action-button.guest-lock:hover {
+          background: #000;
+          transform: translateY(-2px);
+          box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+        .investigator-badge {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          color: #2a9d8f;
+          font-size: 0.75rem;
+          font-weight: 600;
+          letter-spacing: 0.05em;
+          text-transform: uppercase;
+          background: rgba(42, 157, 143, 0.05);
+          padding: 0.4rem 0.8rem;
+          border-radius: 20px;
+          border: 1px solid rgba(42, 157, 143, 0.2);
+          animation: noticeFadeIn 0.5s ease-out;
+        }
+        .ready-pulse {
+          animation: buttonReadyPulse 2s infinite;
+          box-shadow: 0 0 15px rgba(179, 58, 58, 0.3);
+        }
+        @keyframes buttonReadyPulse {
+          0% { box-shadow: 0 0 10px rgba(179, 58, 58, 0.3); }
+          50% { box-shadow: 0 0 25px rgba(179, 58, 58, 0.6); }
+          100% { box-shadow: 0 0 10px rgba(179, 58, 58, 0.3); }
         }
       `}</style>
     </div>

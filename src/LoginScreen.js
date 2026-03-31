@@ -112,7 +112,7 @@ export default function LoginScreen() {
     timestamp: serverTimestamp(),
   });
 
-  navigate("/home");
+  navigate("/");
   return;
 }
 
@@ -178,7 +178,7 @@ export default function LoginScreen() {
       });
 
       setSuccessMessage("Registration complete...");
-      setTimeout(() => navigate("/home"), 1000);
+      setTimeout(() => navigate("/"), 1000);
     } catch (error) {
       console.error(error);
       setErrorMessage(formatFirebaseError(error.code));
@@ -450,7 +450,7 @@ export default function LoginScreen() {
                   ? "ADMIN LOGIN"
                   : isRegister
                   ? "CREATE ACCOUNT"
-                  : "ENTER SYSTEM"}
+                  : "INITIALIZE NEURAL INTERFACE"}
               </span>
               {isLoading && <div className="button-loader" />}
             </button>

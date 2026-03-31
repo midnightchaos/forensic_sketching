@@ -78,18 +78,14 @@ const AnimatedRoutes = () => {
   return (
     <PageTransition>
       <Routes location={location}>
-        {/* Public */}
-        <Route path="/" element={<LoginScreen />} />
+        {/* Public Landing - Now HomePage */}
+        <Route path="/" element={<HomePage />} />
+        
+        {/* Authentication */}
+        <Route path="/login" element={<LoginScreen />} />
+        <Route path="/admin-signup" element={<AdminSignup />} />
 
-        {/* Authenticated users only */}
-        <Route
-          path="/home"
-          element={
-            <UserRoute>
-              <HomePage />
-            </UserRoute>
-          }
-        />
+        {/* Protected routes */}
         <Route
           path="/attributes"
           element={
@@ -124,8 +120,6 @@ const AnimatedRoutes = () => {
         />
 
         {/* Admin only */}
-        <Route path="/admin-signup" element={<AdminSignup />} />
-
         <Route
           path="/admin"
           element={
@@ -143,7 +137,7 @@ const AnimatedRoutes = () => {
           }
         />
 
-        {/* Fallback */}
+        {/* Fallback to Home */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </PageTransition>

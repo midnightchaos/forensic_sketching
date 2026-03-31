@@ -10,7 +10,6 @@ import { useNavigate } from "react-router-dom";
 import { db, storage } from "./firebaseConfig";
 import { collection, addDoc } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import closeIcon from "./assets/close.png";
 import saveIcon from "./assets/save.png";
 
 export default function AdminHomeScreen() {

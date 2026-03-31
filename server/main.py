@@ -72,6 +72,7 @@ transformer_engine = None
 transformer_refiner = None
 sd_inpaint_pipe = None
 sd_pipe = None
+whisper_model = None
 
 def get_whisper():
     global whisper_model
@@ -321,8 +322,9 @@ Description:
                 json_res = json.loads(raw_response)
         except Exception as json_err:
             print(f"❌ JSON Parse Error: {json_err}")
+            print(f"--- RAW LLM RESPONSE FOR DEBUG ---\n{raw_response}\n--- END RAW ---")
             # Final fallback: try to find anything that looks like a dict
-            return jsonify({"success": False, "error": f"LLM returned invalid JSON: {raw_response[:100]}..."}), 500
+            return jsonify({"success": False, "error": f"LLM returned invalid JSON. Check server logs for details."}), 500
         
         # Inject gender into rich_prompt if it feels generic
         if "rich_prompt" in json_res:

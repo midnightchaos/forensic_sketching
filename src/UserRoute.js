@@ -30,5 +30,5 @@ export default function UserRoute({ children }) {
   }, []);
 
   if (allowed === null) return null;
-  return allowed ? children : <Navigate to="/" replace />;
+  return allowed ? children : <Navigate to="/login" replace />;
 }
